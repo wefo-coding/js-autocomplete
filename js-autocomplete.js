@@ -29,12 +29,14 @@
         var options = Array.from(select.getElementsByTagName('option')).map(option => option.innerHTML);
         
         // create input
+        var wrapper = global.document.createElement('div');
+        wrapper.classList.add('autocomplete');
+        select.parentNode.insertBefore(wrapper, select);
         var input = global.document.createElement('input');
         input.setAttribute('id', select.getAttribute('id'));
         input.setAttribute('name', select.getAttribute('name'));
         input.setAttribute('type', 'text');
-        input.classList.add('autocomplete');
-        select.parentNode.insertBefore(input, select);
+        wrapper.appendChild(input);
         
         // delete select
         select.remove();
