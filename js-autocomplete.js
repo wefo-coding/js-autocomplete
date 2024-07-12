@@ -68,7 +68,7 @@
             var pos = -1;
             /*for each item in the array...*/
             for (i = 0; i < arr.length; i++) {
-                pos = arr[i].toUpperCase().search(val.toUpperCase());
+                pos = arr[i].toUpperCase().indexOf(val.toUpperCase());
                 /*check if the item contains the same letters as the text field value:*/
                 if (pos >= 0) {
                     /*create a DIV element for each matching element:*/
