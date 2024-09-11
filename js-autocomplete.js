@@ -32,7 +32,7 @@
         var wrapper = global.document.createElement('div');
         wrapper.classList.add('autocomplete');
         select.parentNode.insertBefore(wrapper, select);
-        var input = global.document.createElement('input');
+        var input = global.document.createElement(select.classList.contains('textarea') ? 'textarea' : 'input');
         input.setAttribute('id', select.getAttribute('id'));
         input.setAttribute('name', select.getAttribute('name'));
         input.setAttribute('type', 'text');
@@ -166,11 +166,18 @@
     const observer = new MutationObserver(function (mutations) {
         mutations.forEach(function (mutation) {
             mutation.addedNodes.forEach(function (node) {
-                Array.from(node.getElementsByTagName('select')).forEach(function(select){
-                    if(select.classList.contains('autocomplete')){
-                        convert(select);
+                if(node !== null && node instanceof HTMLElement){
+                    if(node.tagName === 'SELECT'){
+                        convert(node);
                     }
-                });
+                    else{
+                        Array.from(node.getElementsByTagName('select')).forEach(function(select){
+                            if(select.classList.contains('autocomplete')){
+                                convert(select);
+                            }
+                        });
+                    }
+                }
             });
         });
     });
