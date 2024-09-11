@@ -3,7 +3,7 @@
  * 
  * Link:    https://github.com/wefo-coding/js-autocomplete
  * Author:  Florian Otten
- * Version: 0.1.0
+ * Version: 0.2.0
  */
 
 (function (global){
@@ -161,5 +161,24 @@
     
     /* Call init function onload. */
     global.addEventListener('load', init);
+    
+    // MutationObserver zum Überwachen von neuen <select> Elementen
+    const observer = new MutationObserver(function (mutations) {
+        mutations.forEach(function (mutation) {
+            mutation.addedNodes.forEach(function (node) {
+                Array.from(node.getElementsByTagName('select')).forEach(function(select){
+                    if(select.classList.contains('autocomplete')){
+                        convert(select);
+                    }
+                });
+            });
+        });
+    });
+
+    // Überwache das gesamte Dokument
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true
+    });
     
 }(window));
