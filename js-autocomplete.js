@@ -40,6 +40,12 @@
         
         // delete select
         select.remove();
+
+        // selected option
+        var selectedOption = Array.from(select.options).find(o => o.selected);
+        if(selectedOption){
+            input.value = selectedOption.textContent;
+        }
         
         autocomplete(input, options);
     }
