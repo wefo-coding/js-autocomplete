@@ -2,143 +2,139 @@
  * JavaScript Autocomplete.
  * 
  * Link:    https://github.com/wefo-coding/js-autocomplete
- * Author:  Florian Otten
- * Version: 0.2.0
+ * Author:  Florian Otten / Modified by Temos International GmbH
+ * Version: 1.0.0
  */
 
-(function (global){
-    
-    function convert(select){
-        
+(function (global) {
+
+    function convert(select) {
+
         // Make sure the select is a select element.
-        if(
-            !(select instanceof HTMLElement) || 
+        if (
+            !(select instanceof HTMLElement) ||
             select.tagName.toLowerCase() !== 'select' ||
             !select.classList.contains('autocomplete')
-        ){
+        ) {
             return;
         }
-        
-        // Make sure the form has the autocomplete function switched off.
+
+        // Disable native autocomplete on parent form
         var form = select.closest('form');
-        if(form){
+        if (form) {
             form.setAttribute('autocomplete', 'off');
         }
-        
-        // options to array
-        var options = Array.from(select.getElementsByTagName('option')).map(option => option.innerHTML);
-        
-        // create input
+
+        // Map options -> [{ text, value }]
+        var options = Array.from(select.getElementsByTagName('option')).map(option => ({
+            text: option.textContent,
+            value: option.value
+        }));
+
+        // Create wrapper + input
         var wrapper = global.document.createElement('div');
         wrapper.classList.add('autocomplete');
         select.parentNode.insertBefore(wrapper, select);
-        var input = global.document.createElement(select.classList.contains('textarea') ? 'textarea' : 'input');
+
+        var input = global.document.createElement(
+            select.classList.contains('textarea') ? 'textarea' : 'input'
+        );
         input.setAttribute('id', select.getAttribute('id'));
-        input.setAttribute('name', select.getAttribute('name'));
         input.setAttribute('type', 'text');
+        input.setAttribute('autocomplete', 'off');
         wrapper.appendChild(input);
-        
-        // delete select
+
+        // Hidden field (for actual form value)
+        var hidden = global.document.createElement('input');
+        hidden.setAttribute('type', 'hidden');
+        hidden.setAttribute('name', select.getAttribute('name'));
+        wrapper.appendChild(hidden);
+
+        // Selected option -> prefill input + hidden
+        var selectedOption = Array.from(select.options).find(o => o.selected);
+        if (selectedOption) {
+            input.value = selectedOption.textContent;
+            hidden.value = selectedOption.value;
+        }
+
+        // Remove original select
         select.remove();
 
-        // selected option
-        var selectedOption = Array.from(select.options).find(o => o.selected);
-        if(selectedOption){
-            input.value = selectedOption.textContent;
-        }
-        
-        autocomplete(input, options);
+        // Init autocomplete behavior
+        autocomplete(input, options, hidden);
     }
-    
-    // This function was copied from W3schools https://www.w3schools.com/howto/howto_js_autocomplete.asp and modified by Temos International GmbH
-    function autocomplete(inp, arr) {
-        /*the autocomplete function takes two arguments, the text field element and an array of possible autocompleted values:*/
+
+    // Autocomplete logic
+    function autocomplete(inp, arr, hiddenInput) {
         var currentFocus;
-        /*execute a function when someone writes in the text field:*/
-        
-        inp.addEventListener("input", function(e) {
+
+        inp.addEventListener("input", function (e) {
             var a, b, i, val = this.value;
-            /*close any already open lists of autocompleted values*/
+
+            // Hidden-Value standardmäßig gleich Text
+            hiddenInput.value = val;
+
             closeAllLists();
             if (!val) {
                 return false;
             }
             currentFocus = -1;
-            /*create a DIV element that will contain the items (values):*/
+
             a = document.createElement("DIV");
             a.setAttribute("id", this.id + "autocomplete-list");
             a.setAttribute("class", "autocomplete-items");
-            /*append the DIV element as a child of the autocomplete container:*/
             this.parentNode.appendChild(a);
-            
-            var pos = -1;
-            /*for each item in the array...*/
+
             for (i = 0; i < arr.length; i++) {
-                pos = arr[i].toUpperCase().indexOf(val.toUpperCase());
-                /*check if the item contains the same letters as the text field value:*/
-                if (pos >= 0) {
-                    /*create a DIV element for each matching element:*/
+                if (arr[i].text.toUpperCase().indexOf(val.toUpperCase()) >= 0) {
                     b = document.createElement("DIV");
-                    /*make the matching letters bold:*/
-                    b.innerHTML = arr[i].substr(0, pos) + "<strong>" + arr[i].substr(pos, val.length) + "</strong>" + arr[i].substr(pos + val.length);
-                    /*insert a input field that will hold the current array item's value:*/
-                    b.innerHTML += "<input type='hidden' value='" + arr[i] + "'>";
-                    /*execute a function when someone clicks on the item value (DIV element):*/
-                    b.addEventListener("click", function(e) {
-                        /*insert the value for the autocomplete text field:*/
-                        inp.value = this.getElementsByTagName("input")[0].value;
-                        /*close the list of autocompleted values, (or any other open lists of autocompleted values:*/
+                    var pos = arr[i].text.toUpperCase().indexOf(val.toUpperCase());
+                    b.innerHTML = arr[i].text.substr(0, pos) + "<strong>" + arr[i].text.substr(pos, val.length) + "</strong>" + arr[i].text.substr(pos + val.length);
+                    b.innerHTML += "<input type='hidden' value='" + arr[i].text + "'>";
+                    b.addEventListener("click", function (e) {
+                        const itemText = this.getElementsByTagName("input")[0].value;
+                        const selected = arr.find(opt => opt.text === itemText);
+                        inp.value = selected.text;             // Sichtbarer Text
+                        hiddenInput.value = selected.value;     // Value der Option
                         closeAllLists();
                     });
                     a.appendChild(b);
                 }
             }
         });
-        /*execute a function presses a key on the keyboard:*/
-        inp.addEventListener("keydown", function(e) {
+
+        inp.addEventListener("keydown", function (e) {
             var x = document.getElementById(this.id + "autocomplete-list");
             if (x) x = x.getElementsByTagName("div");
-            if (e.keyCode == 40) {
-                /*If the arrow DOWN key is pressed, increase the currentFocus variable:*/
+            if (e.keyCode == 40) { // Pfeil runter
                 currentFocus++;
-                /*and and make the current item more visible:*/
                 addActive(x);
-            } else if (e.keyCode == 38) { //up
-                /*If the arrow UP key is pressed,
-                decrease the currentFocus variable:*/
+            } else if (e.keyCode == 38) { // Pfeil hoch
                 currentFocus--;
-                /*and and make the current item more visible:*/
                 addActive(x);
-            } else if (e.keyCode == 13) {
-                /*If the ENTER key is pressed, prevent the form from being submitted,*/
+            } else if (e.keyCode == 13) { // Enter
                 e.preventDefault();
                 if (currentFocus > -1) {
-                    /*and simulate a click on the "active" item:*/
                     if (x) x[currentFocus].click();
                 }
             }
         });
-        
+
         function addActive(x) {
-            /*a function to classify an item as "active":*/
             if (!x) return false;
-            /*start by removing the "active" class on all items:*/
             removeActive(x);
             if (currentFocus >= x.length) currentFocus = 0;
             if (currentFocus < 0) currentFocus = (x.length - 1);
-            /*add class "autocomplete-active":*/
             x[currentFocus].classList.add("autocomplete-active");
         }
-        
+
         function removeActive(x) {
-            /*a function to remove the "active" class from all autocomplete items:*/
             for (var i = 0; i < x.length; i++) {
                 x[i].classList.remove("autocomplete-active");
             }
         }
-        
+
         function closeAllLists(elmnt) {
-            /*close all autocomplete lists in the document, except the one passed as an argument:*/
             var x = document.getElementsByClassName("autocomplete-items");
             for (var i = 0; i < x.length; i++) {
                 if (elmnt != x[i] && elmnt != inp) {
@@ -146,39 +142,34 @@
                 }
             }
         }
-    
-        /* Close lists when the user clicks in the document. */
-        global.addEventListener('click', function(e){
+
+        global.addEventListener('click', function (e) {
             closeAllLists(e.target);
         });
     }
-    
-    /**
-     * Initialization function
-     */
-    function init(){
-        
-        Array.from(global.document.getElementsByTagName('select')).forEach(function(select){
-            if(select.classList.contains('autocomplete')){
+
+    // Init auf Seitenladevorgang
+    function init() {
+        Array.from(global.document.getElementsByTagName('select')).forEach(function (select) {
+            if (select.classList.contains('autocomplete')) {
                 convert(select);
             }
         });
     }
-    
-    /* Call init function onload. */
+
     global.addEventListener('load', init);
-    
-    // MutationObserver zum Überwachen von neuen <select> Elementen
+
+    // MutationObserver für dynamisch hinzugefügte selects
     const observer = new MutationObserver(function (mutations) {
         mutations.forEach(function (mutation) {
             mutation.addedNodes.forEach(function (node) {
-                if(node !== null && node instanceof HTMLElement){
-                    if(node.tagName === 'SELECT'){
+                if (node !== null && node instanceof HTMLElement) {
+                    if (node.tagName === 'SELECT') {
                         convert(node);
                     }
-                    else{
-                        Array.from(node.getElementsByTagName('select')).forEach(function(select){
-                            if(select.classList.contains('autocomplete')){
+                    else {
+                        Array.from(node.getElementsByTagName('select')).forEach(function (select) {
+                            if (select.classList.contains('autocomplete')) {
                                 convert(select);
                             }
                         });
@@ -188,10 +179,9 @@
         });
     });
 
-    // Überwache das gesamte Dokument
     observer.observe(document.body, {
         childList: true,
         subtree: true
     });
-    
+
 }(window));
