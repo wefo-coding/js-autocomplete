@@ -51,11 +51,15 @@
         wrapper.appendChild(hidden);
 
         // Selected option -> prefill input + hidden
-        var selectedOption = Array.from(select.options).find(o => o.selected);
-        if (selectedOption) {
+        var selectedOption = Array.from(select.options).find(o => o.selected && o.value.trim() !== "");
+        if(selectedOption){
             input.value = selectedOption.textContent;
             hidden.value = selectedOption.value;
+        } else {
+            input.value = "";
+            hidden.value = "";
         }
+
 
         // Remove original select
         select.remove();
