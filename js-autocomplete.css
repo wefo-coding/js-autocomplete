@@ -32,3 +32,7 @@
 .already-selected{
     display: none;
 }
+
+.tag-item{
+    display: inline-block;
+}
