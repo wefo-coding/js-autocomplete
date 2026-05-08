@@ -89,6 +89,7 @@
 
 			tag.appendChild(closeX);
 			tagBox.insertBefore(tag, input);
+			hidden.dispatchEvent(new Event('change', { bubbles: true }));
 			input.dispatchEvent(new Event('input'));
 		}
 
@@ -99,6 +100,7 @@
 				if (t.getAttribute("data-value") === value) t.remove();
 			});
 			hidden.value = selectedValues.map(encodeValue).join(",");
+			hidden.dispatchEvent(new Event('change', { bubbles: true }));
 			input.dispatchEvent(new Event('input'));
 			input.focus();
 		}
@@ -349,6 +351,9 @@
 			});
 		});
 	});
-	observer.observe(document.body, { childList: true, subtree: true });
+	
+	global.addEventListener('load', function() {
+		observer.observe(document.body, { childList: true, subtree: true });
+	});
 
 }(window));
