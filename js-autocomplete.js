@@ -2,7 +2,7 @@
  * JavaScript Autocomplete.
  * Link: 	 https://github.com/wefo-coding/js-autocomplete
  * Author:	 Florian Otten
- * Version:  2.2.0 (Bug fixes and usability improvements)
+ * Version:  2.3.0 (Added abwärtskompatibles native-array feature for C# List binding)
  */
 
 (function (global) {
@@ -24,16 +24,30 @@
 		var allowNew = select.hasAttribute("data-allow-new");
 		var separators = select.getAttribute("data-separator") || "";
 
+		// Schalter für die neue native Listen-Logik (C# List<int> / TemosLoader kompatibel)
+		var useNativeArray = select.hasAttribute("data-native-array");
+
 		var wrapper = global.document.createElement('div');
 		wrapper.classList.add('autocomplete');
 		select.parentNode.insertBefore(wrapper, select);
 
-		var hidden = global.document.createElement('input');
-		hidden.setAttribute('type', 'hidden');
-		hidden.setAttribute('name', select.getAttribute('name') || "");
-		wrapper.appendChild(hidden);
+		// Altes Hidden-Feld nur erstellen, wenn wir NICHT das neue native Array nutzen
+		var hidden;
+		if (!isMultiple || !useNativeArray) {
+			hidden = global.document.createElement('input');
+			hidden.setAttribute('type', 'hidden');
+			hidden.setAttribute('name', select.getAttribute('name') || "");
+			wrapper.appendChild(hidden);
+		}
+
+		// Für die neue native Logik behalten wir das originale Select unsichtbar im DOM
+		if (isMultiple && useNativeArray) {
+			select.style.display = 'none';
+			wrapper.appendChild(select);
+		}
 
 		var selectedValues = [];
+		var selectName = select.getAttribute('name') || "";
 
 		if (!isMultiple) {
 			var input = global.document.createElement(select.classList.contains('textarea') ? 'textarea' : 'input');
@@ -52,6 +66,7 @@
 			return;
 		}
 
+		// --- MULTIPLE LOGIK ---
 		var tagBox = document.createElement("div");
 		tagBox.classList.add("autocomplete-tags");
 		wrapper.appendChild(tagBox);
@@ -63,10 +78,33 @@
 		input.setAttribute('id', select.getAttribute('id') || ("ac-" + Math.random().toString(36).slice(2)));
 		tagBox.appendChild(input);
 
+		// Kombinierte Update-Funktion für beide Welten
+		function updateValues() {
+			if (useNativeArray) {
+				// NEUE WELT: Direkt die Optionen des echten Selects manipulieren
+				Array.from(select.options).forEach(option => {
+					option.selected = selectedValues.includes(String(option.value));
+				});
+				select.dispatchEvent(new Event('change', { bubbles: true }));
+			} else {
+				// ALTE WELT: Komma-separierter String im Hidden-Feld
+				hidden.value = selectedValues.map(encodeValue).join(",");
+				hidden.dispatchEvent(new Event('change', { bubbles: true }));
+			}
+		}
+
 		function addTag(text, value, isNew) {
 			if (selectedValues.includes(String(value))) return;
 			selectedValues.push(String(value));
-			hidden.value = selectedValues.map(encodeValue).join(",");
+
+			if (useNativeArray && isNew) {
+				var newOpt = document.createElement('option');
+				newOpt.value = value;
+				newOpt.textContent = text;
+				select.appendChild(newOpt);
+			}
+
+			updateValues();
 
 			var tag = document.createElement("span");
 			tag.classList.add("tag-item");
@@ -89,7 +127,6 @@
 
 			tag.appendChild(closeX);
 			tagBox.insertBefore(tag, input);
-			hidden.dispatchEvent(new Event('change', { bubbles: true }));
 			input.dispatchEvent(new Event('input'));
 		}
 
@@ -99,20 +136,30 @@
 			Array.from(tagBox.getElementsByClassName("tag-item")).forEach(t => {
 				if (t.getAttribute("data-value") === value) t.remove();
 			});
-			hidden.value = selectedValues.map(encodeValue).join(",");
-			hidden.dispatchEvent(new Event('change', { bubbles: true }));
+
+			updateValues();
+
 			input.dispatchEvent(new Event('input'));
 			input.focus();
 		}
 
+		// Initiale Werte auslesen, die bereits vom Server kamen
 		Array.from(select.options).forEach(o => {
-			if (o.selected && o.value.trim() !== "") addTag(o.textContent || o.value, o.value, false);
+			if (o.selected && o.value.trim() !== "") {
+				if (!selectedValues.includes(String(o.value))) {
+					selectedValues.push(String(o.value));
+				}
+				addTag(o.textContent || o.value, o.value, false);
+			}
 		});
 
-		hidden.value = selectedValues.map(encodeValue).join(",");
-		select.remove();
+		updateValues();
 
-		autocompleteMulti(input, options, hidden, selectedValues, addTag, removeTag, allowNew, separators);
+		if (!useNativeArray) {
+			select.remove();
+		}
+
+		autocompleteMulti(input, options, (useNativeArray ? select : hidden), selectedValues, addTag, removeTag, allowNew, separators);
 	}
 
 	function updateActive(items, focusIdx) {
@@ -125,7 +172,7 @@
 		return focusIdx;
 	}
 
-	function autocompleteMulti(inp, arr, hiddenInput, selectedValues, addTag, removeTag, allowNew, separators) {
+	function autocompleteMulti(inp, arr, targetInput, selectedValues, addTag, removeTag, allowNew, separators) {
 		var currentFocus = -1;
 
 		function handleSelection(forceIdx) {
@@ -134,7 +181,6 @@
 			var idx = (forceIdx !== undefined) ? forceIdx : currentFocus;
 
 			if (items.length > 0 && idx > -1 && items[idx]) {
-				// Triggert den mousedown Event des Elements (egal ob normaler Treffer oder "Neu hinzufügen")
 				items[idx].dispatchEvent(new Event('mousedown'));
 			} else {
 				closeAllLists();
@@ -184,7 +230,6 @@
 			this.parentNode.appendChild(a);
 
 			var q = val.toUpperCase();
-			// 1. Treffer hinzufügen
 			for (var i = 0; i < arr.length; i++) {
 				if (arr[i].text.toUpperCase().indexOf(q) >= 0) {
 					var isSelected = selectedValues.includes(String(arr[i].value));
@@ -208,7 +253,6 @@
 				}
 			}
 
-			// 2. Freitext-Option ans Ende (wenn erlaubt und kein exakter Match)
 			if (allowNew && val.trim() !== "") {
 				var exactMatch = arr.find(o => o.text.toLowerCase() === val.trim().toLowerCase());
 				if (!exactMatch) {
@@ -242,7 +286,6 @@
 		global.addEventListener("click", function (e) { closeAllLists(e.target); });
 	}
 
-	// SINGLE AUTOCOMPLETE (Gleiche Logik für Form-Submit Protection)
 	function autocompleteSingle(inp, arr, hiddenInput, allowNew) {
 		var currentFocus = -1;
 		var lastValidText = inp.value;
@@ -351,8 +394,8 @@
 			});
 		});
 	});
-	
-	global.addEventListener('load', function() {
+
+	global.addEventListener('load', function () {
 		observer.observe(document.body, { childList: true, subtree: true });
 	});
 
