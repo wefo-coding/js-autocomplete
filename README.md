@@ -33,6 +33,20 @@ For a tag-based input that allows custom entries, use `multiple`, `data-allow-ne
 </select>
 ```
 
+Depending on your backend requirements, you can control how the selected values are submitted in the HTML form:
+
+### 1. Default Mode (Without data-native-array)
+The script removes the original select element and creates a single hidden input element. Multiple selections are joined into a single comma-separated string.
+- Submitted Form Data: UserIds=3,5
+- Best used for: Traditional Node.js, PHP backends, or custom frontend scripts that parse comma-separated strings manually.
+
+### 2. Native Array Mode (With data-native-array)
+The script keeps the original select multiple active in the DOM but hides it visually. Selected tags directly manipulate the selected property of the hidden native options.
+- Submitted Form Data: UserIds=3&UserIds=5
+- Best used for: ASP.NET Core Model Binding, AJAX form loaders (like TemosLoader utilizing URLSearchParams), or any framework relying on HTTP standard multi-value queries.
+
+---
+
 ## Data Attributes
 
 | Attribute        | Description                                                 |
