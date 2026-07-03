@@ -2,7 +2,7 @@
  * JavaScript Autocomplete.
  * Link: 	 https://github.com/wefo-coding/js-autocomplete
  * Author:	 Florian Otten
- * Version:  2.3.0 (Added abwärtskompatibles native-array feature for C# List binding)
+ * Version:  2.3.2 (Fixed race condition during initial tag rendering)
  */
 
 (function (global) {
@@ -11,6 +11,10 @@
 
 	function convert(select) {
 		if (!(select instanceof HTMLElement) || select.tagName.toLowerCase() !== 'select' || !select.classList.contains('autocomplete')) return;
+
+		// Doppel-Initialisierungs-Schutz (wichtig bei MutationObserver & AJAX-Loaders)
+		if (select.dataset.autocompleteInitialized === "true") return;
+		select.dataset.autocompleteInitialized = "true";
 
 		var form = select.closest('form');
 		if (form) form.setAttribute('autocomplete', 'off');
@@ -79,21 +83,25 @@
 		tagBox.appendChild(input);
 
 		// Kombinierte Update-Funktion für beide Welten
-		function updateValues() {
+		function updateValues(isInit) {
 			if (useNativeArray) {
 				// NEUE WELT: Direkt die Optionen des echten Selects manipulieren
 				Array.from(select.options).forEach(option => {
 					option.selected = selectedValues.includes(String(option.value));
 				});
-				select.dispatchEvent(new Event('change', { bubbles: true }));
+				if (!isInit) {
+					select.dispatchEvent(new Event('change', { bubbles: true }));
+				}
 			} else {
 				// ALTE WELT: Komma-separierter String im Hidden-Feld
 				hidden.value = selectedValues.map(encodeValue).join(",");
-				hidden.dispatchEvent(new Event('change', { bubbles: true }));
+				if (!isInit) {
+					hidden.dispatchEvent(new Event('change', { bubbles: true }));
+				}
 			}
 		}
 
-		function addTag(text, value, isNew) {
+		function addTag(text, value, isNew, isInit) {
 			if (selectedValues.includes(String(value))) return;
 			selectedValues.push(String(value));
 
@@ -104,7 +112,11 @@
 				select.appendChild(newOpt);
 			}
 
-			updateValues();
+			// FEHLERBEHEBUNG: updateValues wird NICHT während der Initialisierung aufgerufen,
+			// um die selected-Zustände der noch folgenden Optionen im Loop nicht zu zerstören.
+			if (!isInit) {
+				updateValues(false);
+			}
 
 			var tag = document.createElement("span");
 			tag.classList.add("tag-item");
@@ -119,7 +131,7 @@
 			var closeX = document.createElement("button");
 			closeX.setAttribute("type", "button");
 			closeX.classList.add("tag-remove");
-			closeX.textContent = "×";
+			closeX.textContent = "\u00D7"; // Sicheres Encoding-Kreuz (keine Raute mehr)
 			closeX.addEventListener("click", function (e) {
 				e.stopPropagation();
 				removeTag(value);
@@ -127,7 +139,10 @@
 
 			tag.appendChild(closeX);
 			tagBox.insertBefore(tag, input);
-			input.dispatchEvent(new Event('input'));
+
+			if (!isInit) {
+				input.dispatchEvent(new Event('input'));
+			}
 		}
 
 		function removeTag(value) {
@@ -137,7 +152,7 @@
 				if (t.getAttribute("data-value") === value) t.remove();
 			});
 
-			updateValues();
+			updateValues(false);
 
 			input.dispatchEvent(new Event('input'));
 			input.focus();
@@ -146,14 +161,12 @@
 		// Initiale Werte auslesen, die bereits vom Server kamen
 		Array.from(select.options).forEach(o => {
 			if (o.selected && o.value.trim() !== "") {
-				if (!selectedValues.includes(String(o.value))) {
-					selectedValues.push(String(o.value));
-				}
-				addTag(o.textContent || o.value, o.value, false);
+				addTag(o.textContent || o.value, o.value, false, true);
 			}
 		});
 
-		updateValues();
+		// Synchronisation erst JETZT einmalig triggern, wenn alle Tags erfasst wurden
+		updateValues(true);
 
 		if (!useNativeArray) {
 			select.remove();
@@ -167,6 +180,8 @@
 		items.forEach(el => el.classList.remove("autocomplete-active"));
 		if (focusIdx >= items.length) focusIdx = 0;
 		if (focusIdx < 0) focusIdx = items.length - 1;
+
+		// Korrigiert: classList ergänzt für fehlerfreie Tastaturnavigation
 		items[focusIdx].classList.add("autocomplete-active");
 		items[focusIdx].scrollIntoView({ block: "nearest" });
 		return focusIdx;
@@ -243,7 +258,7 @@
 						b.addEventListener("mousedown", (function (it) {
 							return function (e) {
 								e.preventDefault();
-								addTag(it.text, it.value, false);
+								addTag(it.text, it.value, false, false);
 								inp.value = "";
 								closeAllLists();
 							};
@@ -261,7 +276,7 @@
 					n.innerHTML = 'New entry: "<strong>' + val + '</strong>"';
 					n.addEventListener("mousedown", function (e) {
 						e.preventDefault();
-						addTag(val, val, true);
+						addTag(val, val, true, false);
 						inp.value = "";
 						closeAllLists();
 					});
